@@ -43,6 +43,8 @@ const (
 	tppUsernameKey    = "username"
 	tppPasswordKey    = "password"
 	tppAccessTokenKey = "access-token"
+	tppClientId       = "cert-manager.io"
+	tppScopes         = "certificate:manage"
 
 	defaultAPIKeyKey = "api-key"
 )
@@ -355,9 +357,22 @@ func (v *Venafi) VerifyCredentials() error {
 		}
 
 		if v.config.Credentials.User != "" && v.config.Credentials.Password != "" {
-			err := v.tppClient.Authenticate(&endpoint.Authentication{
+			// Use vcert libray GetRefreshToken which bring back a token pair.
+			// This includes the access_token which we set against the tppClient.
+			resp, err := v.tppClient.GetRefreshToken(&endpoint.Authentication{
 				User:     v.config.Credentials.User,
 				Password: v.config.Credentials.Password,
+				ClientId: tppClientId,
+				Scope:    tppScopes,
+			})
+
+			if err != nil {
+				return fmt.Errorf("tppClient.GetRefreshToken: %v", err)
+			}
+
+			// So that the access_token is stored on the tppClient bject
+			err = v.tppClient.Authenticate(&endpoint.Authentication{
+				AccessToken: resp.Access_token,
 			})
 
 			if err != nil {
