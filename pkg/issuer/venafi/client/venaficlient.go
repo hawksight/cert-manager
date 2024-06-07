@@ -20,6 +20,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
+	"log"
 	"net"
 	"net/http"
 	"time"
@@ -95,6 +96,30 @@ func New(namespace string, secretsLister internalinformers.SecretLister, issuer 
 		return nil, err
 	}
 
+	if cfg.Credentials.Password != "" {
+		// Get an access token
+		c, _ := tpp.NewConnector(cfg.BaseUrl, cfg.Zone, true, nil)
+		auth := endpoint.Authentication{
+			Scope:    tppScopes,
+			ClientId: tppClientId,
+			User:     cfg.Credentials.User,
+			Password: cfg.Credentials.Password,
+		}
+
+		resp, err := c.GetRefreshToken(&auth)
+
+		if err != nil {
+			return nil, fmt.Errorf("tppClient.GetRefreshToken: %v", err)
+		}
+		log.Print(resp.Access_token)
+
+		// blank the passsword from context so it skips that check in vcert NewClient
+		cfg.Credentials.Password = ""
+		cfg.Credentials.AccessToken = resp.Access_token
+
+	}
+
+	// continue as normal
 	vcertClient, err := vcert.NewClient(cfg)
 	if err != nil {
 		return nil, fmt.Errorf("error creating Venafi client: %s", err.Error())
@@ -344,6 +369,8 @@ func (v *Venafi) VerifyCredentials() error {
 			return fmt.Errorf("credentials not configured")
 		}
 
+		log.Print("STARTED VERIFYCREDNETIALS FUNCTION")
+
 		if v.config.Credentials.AccessToken != "" {
 			_, err := v.tppClient.VerifyAccessToken(&endpoint.Authentication{
 				AccessToken: v.config.Credentials.AccessToken,
@@ -357,6 +384,7 @@ func (v *Venafi) VerifyCredentials() error {
 		}
 
 		if v.config.Credentials.User != "" && v.config.Credentials.Password != "" {
+			log.Print("I HAVE USERNAME & PASS")
 			// Use vcert libray GetRefreshToken which bring back a token pair.
 			// This includes the access_token which we set against the tppClient.
 			resp, err := v.tppClient.GetRefreshToken(&endpoint.Authentication{
@@ -369,6 +397,7 @@ func (v *Venafi) VerifyCredentials() error {
 			if err != nil {
 				return fmt.Errorf("tppClient.GetRefreshToken: %v", err)
 			}
+			log.Print(resp.Access_token)
 
 			// So that the access_token is stored on the tppClient bject
 			err = v.tppClient.Authenticate(&endpoint.Authentication{
