@@ -19,6 +19,7 @@ package venafi
 import (
 	"context"
 	"fmt"
+	"log"
 
 	corev1 "k8s.io/api/core/v1"
 
@@ -29,6 +30,7 @@ import (
 )
 
 func (v *Venafi) Setup(ctx context.Context) (err error) {
+	log.Print("SETUP BEING")
 	defer func() {
 		if err != nil {
 			errorMessage := "Failed to setup Venafi issuer"
@@ -38,6 +40,7 @@ func (v *Venafi) Setup(ctx context.Context) (err error) {
 		}
 	}()
 
+	log.Print("CREATE CLIENT")
 	client, err := v.clientBuilder(v.resourceNamespace, v.secretsLister, v.issuer, v.Metrics, v.log, v.userAgent)
 	if err != nil {
 		return fmt.Errorf("error building client: %v", err)
@@ -46,6 +49,8 @@ func (v *Venafi) Setup(ctx context.Context) (err error) {
 	if err != nil {
 		return fmt.Errorf("error pinging Venafi API: %v", err)
 	}
+
+	log.Print("HELLO SETUP")
 
 	err = client.VerifyCredentials()
 	if err != nil {
